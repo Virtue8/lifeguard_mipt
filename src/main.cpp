@@ -1,13 +1,16 @@
 #include "Arduino.h"
-#include "constants.h"
 #include <Wire.h>
 #include "I2Cdev.h"
 #include "MPU6050.h"
 
+#include "main.h"
+#include "constants.h"
+#include "connection.h"
+#include "analysis.h"
+
 void IRAM_ATTR check_movement();
 void IRAM_ATTR check_battery();
-void make_buzz();
-void smart_delay(int time);
+void emergency();
 
 MPU6050 mpu;
 
@@ -15,55 +18,10 @@ hw_timer_t* sensor_timer = NULL;
 hw_timer_t* battery_timer = NULL;
 hw_timer_t* buzzer_timer = NULL;
 
-bool global_is_checking = false;
-bool global_buzzing = true;
-
-bool check_pulse()
-{
-    return true;
-}
-
-bool is_movement()
-{
-    //return true;
-    mpu.setSleepEnabled(false);
-
-    int N = 100;
-
-    struct single_data
-    {
-        int16_t ax;
-        int16_t ay;
-        int16_t az;
-    };
-    struct single_data data[N];
-
-    int min_ax = 32767;
-    int max_ax = -32768;
-    for (int i = 0; i < N; i++)
-    {
-        int16_t ax, ay, az;
-        for (int j = 0; j < 10; j++)
-        {
-            mpu.getAcceleration(&ax, &ay, &az);
-            data[i].ax += ax;
-            data[i].ay += ay;
-            data[i].az += az;
-            smart_delay(5);
-        }
-        data[i].ax /= 10;
-        data[i].ay /= 10;
-        data[i].az /= 10;
-
-        if (data[i].ax > max_ax)
-            max_ax = data[i].ax;
-        if (data[i].ax < min_ax)
-            min_ax = data[i].ax;
-    }
-    Serial.println(max_ax - min_ax);
-
-    return true;
-}
+bool button_pressed = true;
+bool movement_is_checking = false;
+bool pulse_is_checking = false;
+bool is_buzzing = false;
 
 void setup()
 {
@@ -85,7 +43,7 @@ void setup()
     buzzer_timer = timerBegin(2, 80, true);
     timerAttachInterrupt(buzzer_timer, &make_buzz, true);
     timerAlarmWrite(buzzer_timer, 500000, true);
-    timerAlarmEnable(buzzer_timer);
+    timerAlarmEnable(buzzer_timer);//TODO: вкл/выкл при необходимости
 
     pinMode(LED_PIN, OUTPUT);
     pinMode(BUZZER_PIN, OUTPUT);
@@ -98,17 +56,65 @@ void setup()
     Wire.begin(SDA_PIN, SCL_PIN);
     Wire.setClock(400000);
     mpu.initialize();
+
+    // if (connectToWiFi())
+    //     send_tg_message("Connection established");
+    connectToWiFi();
 }
 
 void loop()
 {
-    is_movement();
+    if (movement_is_checking)
+    {
+        if (!is_movement())
+        {
+            bool b = false;
+            for (int i = 0; i < 5 && !b; i++)
+            {
+                b |= is_movement();
+                Serial.println(b);
+            }
+            if (!b)
+            {
+                send_tg_message("NO MOVEMENT");
+            }
+        }
+    }
+    // if (movement_is_checking)
+    // {
+    //     if (!is_movement())
+    //     {
+    //         int i = 1;
+    //         while (i <= 5 || !is_movement)
+    //             i++;
+    //         if (i == 5)
+    //         {
+    //             is_buzzing = true;
+    //             int start_time = millis();
+    //             while (!button_pressed && millis() - start_time < 10000)
+    //                 delay(10);
+    //             if (millis() - start_time < 10000)
+    //                 is_buzzing = false;
+    //             else
+    //                 emergency();
+    //         }
+    //     }
+    // }
+}
+
+void emergency()
+{
+    send_tg_message("NO MOVEMENT");
+    while (!button_pressed)
+        ;
+    is_buzzing = false;
+    movement_is_checking = false;
+    pulse_is_checking = false;
 }
 
 void make_buzz()
 {
-    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-    if (global_buzzing)
+    if (is_buzzing)
     {
         digitalWrite(BUZZER_PIN, !digitalRead(BUZZER_PIN));
         digitalWrite(VIBRO_PIN, !digitalRead(VIBRO_PIN));
@@ -120,14 +126,16 @@ void make_buzz()
     }
 }
 
+void smart_delay(int time)
+{
+    int start = millis();
+    while (millis() - start < time)
+        ;
+}
+
 void IRAM_ATTR check_movement()
 {
-    digitalWrite(LED_PIN, HIGH);
-    delay(1000);
-    if (!global_is_checking)
-        if (true)
-            check_pulse();
-    digitalWrite(LED_PIN, LOW);
+    movement_is_checking = true;
 }
 
 void IRAM_ATTR check_battery()
@@ -144,11 +152,4 @@ void IRAM_ATTR check_battery()
     Serial.println(V_sum);
     if (V_sum < LOW_CHARGE_V)
         Serial.println("LOW CHARGE");
-}
-
-void smart_delay(int time)
-{
-    int start = millis();
-    while (millis() - start < time)
-        ;
 }
