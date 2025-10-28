@@ -5,8 +5,8 @@
 #include "constants.h"
 #include "connection.h"
 
-const char* ssid = "@FTL_2G";
-const char* password = "zuevpidoras";
+const char* ssid = "Zandik";
+const char* password = "fuckkk123";
 
 bool connectToWiFi()
 {

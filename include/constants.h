@@ -7,7 +7,7 @@
 #define SCL_PIN     22
 #define VIBRO_PIN   23
 #define BUZZER_PIN  15
-#define BUTTON_PIN  0
+#define BUTTON_PIN  5
 #define LED_PIN     2
 #define TX_PIN      17
 #define RX_PIN      16
@@ -16,7 +16,7 @@
 //--------TIME CONSTANTS-------------
 
 //microseconds!!!
-const int SENSOR_CHECK_PERIOD = 30*1000000;
+const int SENSOR_CHECK_PERIOD = 5*1000000;
 const int BATTERY_CHECK_PERIOD = 300000000;
 const int CONNECTION_CHECK_PERIOD = 300000000;
 

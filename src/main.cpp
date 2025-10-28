@@ -10,6 +10,11 @@
 
 void IRAM_ATTR check_movement();
 void IRAM_ATTR check_battery();
+void IRAM_ATTR make_buzz();
+
+void button_interrupt();
+void start_buzzing();
+void end_buzzing();
 void emergency();
 
 MPU6050 mpu;
@@ -18,7 +23,7 @@ hw_timer_t* sensor_timer = NULL;
 hw_timer_t* battery_timer = NULL;
 hw_timer_t* buzzer_timer = NULL;
 
-bool button_pressed = true;
+bool button_was_pressed = false;
 bool movement_is_checking = false;
 bool pulse_is_checking = false;
 bool is_buzzing = false;
@@ -43,7 +48,8 @@ void setup()
     buzzer_timer = timerBegin(2, 80, true);
     timerAttachInterrupt(buzzer_timer, &make_buzz, true);
     timerAlarmWrite(buzzer_timer, 500000, true);
-    timerAlarmEnable(buzzer_timer);//TODO: вкл/выкл при необходимости
+    //timerAlarmEnable(buzzer_timer);//TODO: вкл/выкл при необходимости
+    timerAlarmDisable(buzzer_timer);
 
     pinMode(LED_PIN, OUTPUT);
     pinMode(BUZZER_PIN, OUTPUT);
@@ -52,6 +58,9 @@ void setup()
     pinMode(BATTERY_PIN, INPUT_PULLUP);
     pinMode(SDA_PIN, INPUT_PULLUP);
     pinMode(SCL_PIN, INPUT_PULLUP);
+    pinMode(BUTTON_PIN, INPUT);
+
+    attachInterrupt(BUTTON_PIN, button_interrupt, HIGH);
 
     Wire.begin(SDA_PIN, SCL_PIN);
     Wire.setClock(400000);
@@ -69,15 +78,32 @@ void loop()
         if (!is_movement())
         {
             bool b = false;
-            for (int i = 0; i < 5 && !b; i++)
+            for (int i = 0; i < 5 && !b && !button_was_pressed; i++)
             {
                 b |= is_movement();
-                Serial.println(b);
+                Serial.print("b = ");
+                Serial.print(b);
+                Serial.print("; button = ");
+                Serial.println(button_was_pressed);
             }
-            if (!b)
+            if (!b && !button_was_pressed)
             {
-                send_tg_message("NO MOVEMENT");
+                start_buzzing();
+                int start_time = millis();
+                while (millis() - start_time < 10000 && !button_was_pressed)
+                    delay(100);
+                if (button_was_pressed)
+                {
+                    end_buzzing();
+                    button_was_pressed = false;
+                }
+                else
+                {
+                    emergency();
+                }
             }
+            if (button_was_pressed)
+                button_was_pressed = false;
         }
     }
     // if (movement_is_checking)
@@ -91,7 +117,7 @@ void loop()
     //         {
     //             is_buzzing = true;
     //             int start_time = millis();
-    //             while (!button_pressed && millis() - start_time < 10000)
+    //             while (!button_was_pressed && millis() - start_time < 10000)
     //                 delay(10);
     //             if (millis() - start_time < 10000)
     //                 is_buzzing = false;
@@ -102,28 +128,44 @@ void loop()
     // }
 }
 
+void button_interrupt()
+{
+    button_was_pressed = true;
+    //Serial.println("button!");
+}
+
 void emergency()
 {
     send_tg_message("NO MOVEMENT");
-    while (!button_pressed)
-        ;
+    while (!button_was_pressed)
+    {
+        delay(100);
+        /*Serial.print("waiting, button = ");
+        Serial.println(button_was_pressed);*/
+    }
+    end_buzzing();
     is_buzzing = false;
     movement_is_checking = false;
     pulse_is_checking = false;
+    button_was_pressed = false;
+}
+
+void start_buzzing()
+{
+    timerAlarmEnable(buzzer_timer);
+}
+
+void end_buzzing()
+{
+    timerAlarmDisable(buzzer_timer);
+    digitalWrite(BUZZER_PIN, LOW);
+    digitalWrite(VIBRO_PIN, LOW);
 }
 
 void make_buzz()
 {
-    if (is_buzzing)
-    {
-        digitalWrite(BUZZER_PIN, !digitalRead(BUZZER_PIN));
-        digitalWrite(VIBRO_PIN, !digitalRead(VIBRO_PIN));
-    }
-    else
-    {
-        digitalWrite(BUZZER_PIN, LOW);
-        digitalWrite(VIBRO_PIN, LOW);
-    }
+    digitalWrite(BUZZER_PIN, !digitalRead(BUZZER_PIN));
+    digitalWrite(VIBRO_PIN, !digitalRead(VIBRO_PIN));
 }
 
 void smart_delay(int time)
