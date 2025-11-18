@@ -23,7 +23,7 @@ const int CONNECTION_CHECK_PERIOD = 300000000;
 //--------WIFI CONSTANTS-------------
 
 const String telegramBotToken = "8242846318:AAHPON-9mM39k9YYO01KKtm2JD-_rEdMl5c";
-const String telegramChatID_VAN = "541565068";
+const String telegramChatID_IVAN = "541565068";
 const String telegramChatID_VADIM = "1746293662";
 
 #endif

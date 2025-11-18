@@ -1,8 +1,3 @@
-#include "Arduino.h"
-#include <Wire.h>
-#include "I2Cdev.h"
-#include "MPU6050.h"
-
 #include "main.h"
 #include "constants.h"
 #include "connection.h"
@@ -30,19 +25,21 @@ bool is_buzzing = false;
 
 void setup()
 {
-    Serial.begin(9600);
+    Serial.begin (9600);
 
     //инициализация таймера проверки датчика
-    sensor_timer = timerBegin(0, 80, true); //инициализация таймера. 80 - коэф. предделителя
-    timerAttachInterrupt(sensor_timer, &check_movement, true); //прикрепить функцию к таймеру
-    timerAlarmWrite(sensor_timer, SENSOR_CHECK_PERIOD, true); //задать время в мкс
-    timerAlarmEnable(sensor_timer); //включить таймер
+    data.sensor_timer = timerBegin (0, 80, true); //инициализация таймера. 80 - коэф. предделителя
+
+    timerAttachInterrupt (data.sensor_timer, (void IRAM_ATTR(*)()) movement_check, true); //прикрепить функцию к таймеру
+    timerAlarmWrite (data.sensor_timer, SENSOR_CHECK_PERIOD, true); //задать время в мкс
+    timerAlarmEnable (data.sensor_timer); //включить таймер
 
     //инициализация таймера проверки батареи
-    battery_timer = timerBegin(1, 80, true);
-    timerAttachInterrupt(battery_timer, &check_battery, true);
-    timerAlarmWrite(battery_timer, BATTERY_CHECK_PERIOD, true);
-    timerAlarmEnable(battery_timer);
+    data.battery_timer = timerBegin (1, 80, true); 
+    
+    timerAttachInterrupt (data.battery_timer, (void IRAM_ATTR(*)()) battery_check, true);
+    timerAlarmWrite (data.battery_timer, BATTERY_CHECK_PERIOD, true);
+    timerAlarmEnable (data.battery_timer);
 
     //инициализация таймера для пищалки
     buzzer_timer = timerBegin(2, 80, true);
@@ -51,9 +48,9 @@ void setup()
     //timerAlarmEnable(buzzer_timer);//TODO: вкл/выкл при необходимости
     timerAlarmDisable(buzzer_timer);
 
-    pinMode(LED_PIN, OUTPUT);
-    pinMode(BUZZER_PIN, OUTPUT);
-    pinMode(VIBRO_PIN, OUTPUT);
+    pinMode (LED_PIN, OUTPUT);
+    pinMode (BUZZER_PIN, OUTPUT);
+    pinMode (VIBRO_PIN, OUTPUT);
 
     pinMode(BATTERY_PIN, INPUT_PULLUP);
     pinMode(SDA_PIN, INPUT_PULLUP);
@@ -62,20 +59,19 @@ void setup()
 
     attachInterrupt(BUTTON_PIN, button_interrupt, HIGH);
 
-    Wire.begin(SDA_PIN, SCL_PIN);
-    Wire.setClock(400000);
-    mpu.initialize();
+    Wire.begin (SDA_PIN, SCL_PIN);
+    Wire.setClock (400000);
+    data.mpu.initialize ();
 
-    // if (connectToWiFi())
-    //     send_tg_message("Connection established");
-    connectToWiFi();
+    if (connect_to_wifi ()) send_tg_message ("Connection established");
+    connect_to_wifi ();
 }
 
 void loop()
 {
-    if (movement_is_checking)
+    if (movement_check)
     {
-        if (!is_movement())
+        if (!is_moving (&data))
         {
             bool b = false;
             for (int i = 0; i < 5 && !b && !button_was_pressed; i++)
@@ -106,9 +102,9 @@ void loop()
                 button_was_pressed = false;
         }
     }
-    // if (movement_is_checking)
+    // if (movement_check)
     // {
-    //     if (!is_movement())
+    //     if (!is_moving())
     //     {
     //         int i = 1;
     //         while (i <= 5 || !is_movement)
