@@ -48,8 +48,8 @@ void setup()
     buzzer_timer = timerBegin(2, 80, true);
     timerAttachInterrupt(buzzer_timer, &make_buzz, true);
     timerAlarmWrite(buzzer_timer, 500000, true);
-    //timerAlarmEnable(buzzer_timer);//TODO: вкл/выкл при необходимости
-    timerAlarmDisable(buzzer_timer);
+    timerAlarmEnable(buzzer_timer);//TODO: вкл/выкл при необходимости
+    //timerAlarmDisable(buzzer_timer);
 
     pinMode(LED_PIN, OUTPUT);
     pinMode(BUZZER_PIN, OUTPUT);

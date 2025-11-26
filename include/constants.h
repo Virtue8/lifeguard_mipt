@@ -5,8 +5,8 @@
 
 #define SDA_PIN     21
 #define SCL_PIN     22
-#define VIBRO_PIN   23
-#define BUZZER_PIN  15
+#define VIBRO_PIN   15
+#define BUZZER_PIN  18
 #define BUTTON_PIN  5
 #define LED_PIN     2
 #define TX_PIN      17
