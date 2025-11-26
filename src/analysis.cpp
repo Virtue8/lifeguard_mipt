@@ -1,39 +1,126 @@
 #include "main.h"
 
-bool is_pulsing ()
+bool is_pulsing () 
 {
-    struct DeviceData* data = (struct DeviceData*) malloc (sizeof(struct DeviceData));
+    debug.begin (9600);
+    debug.println ("MAX30105 Heart Rate Monitor Started");
 
-    //add condition for 5-20 sec burst of measurements
-
-    debug.begin(9600);
-    debug.println("MAX30105 Basic Readings Example");
-
-    // Initialize sensor
-    if (particleSensor.begin() == false)
+    // Инициализация сенсора
+    if (particleSensor.begin () == false) 
     {
-        debug.println("MAX30105 was not found. Please check wiring/power. ");
-        while (1);
+        debug.println ("MAX30105 was not found. Please check wiring/power.");
+        return false;
     }
 
-    particleSensor.setup(); //Configure sensor. Use 6.4mA for LED drive
+    particleSensor.setup (); // Конфигурация сенсора
+    particleSensor.setPulseAmplitudeRed (0x0A); // Настройка амплитуды для лучшего сигнала
+    particleSensor.setPulseAmplitudeIR (0x0A);
 
-    while (true)
+    // Параметры для анализа пульса
+    const int SAMPLE_WINDOW = 10000; // 10 секунд измерения
+    const int MIN_HEART_RATE = 40;   // минимальный нормальный пульс
+    const int MAX_HEART_RATE = 180;  // максимальный нормальный пульс
+    const int IR_THRESHOLD = 50000;  // порог для обнаружения пульсации
+    
+    unsigned long startTime = millis ();
+    int samples = 0;
+    int pulseCount = 0;
+    int lastIRValue = 0;
+    bool wasRising = false;
+    long totalIR = 0;
+
+    debug.println ("Starting heart rate monitoring...");
+
+    while (millis () - startTime < SAMPLE_WINDOW) 
     {
-        /*debug.print(" R[");
-        debug.print(particleSensor.getRed());
-        debug.print("] IR[");
-        debug.print(particleSensor.getIR());
-        debug.print("] G[");
-        debug.print(particleSensor.getGreen());
-        debug.print("]");*/
-        debug.print(particleSensor.getIR());
-            Serial.println();
-        delay(10);
+        int irValue = particleSensor.getIR ();
+        totalIR += irValue;
+        samples++;
+
+        // Обнаружение пиков (простой алгоритм)
+        if (irValue > IR_THRESHOLD) 
+        {
+            if (lastIRValue <= IR_THRESHOLD && !wasRising) 
+            {
+                // Обнаружен восходящий фронт - потенциальный удар сердца
+                pulseCount++;
+                wasRising = true;
+                debug.println ("Beat detected!");
+            }
+        } 
+        else 
+        {
+            wasRising = false;
+        }
+
+        lastIRValue = irValue;
+
+        // Вывод данных для отладки (можно уменьшить частоту)
+        if (samples % 100 == 0) {
+            debug.print ("IR: ");
+            debug.print (irValue);
+            debug.print (" | Beats: ");
+            debug.println (pulseCount);
+        }
+
+        delay (10);
     }
 
-    return true;
+    // Расчет среднего значения IR и пульса
+    int averageIR = totalIR / samples;
+    int heartRate = (pulseCount * 60000) / SAMPLE_WINDOW; // ударов в минуту
+
+    debug.println ("\n=== Monitoring Results ===");
+    debug.print ("Total samples: ");
+    debug.println (samples);
+    debug.print ("Average IR: ");
+    debug.println (averageIR);
+    debug.print ("Detected heart rate: ");
+    debug.print (heartRate);
+    debug.println (" BPM");
+
+    // Анализ результатов
+    bool isNormal = true;
+    
+    if (averageIR < 10000) 
+    {
+        debug.println ("ALERT: Poor sensor contact - check placement!");
+        isNormal = false;
+    }
+    else if (pulseCount == 0) 
+    {
+        debug.println ("ALERT: No heartbeat detected!");
+        isNormal = false;
+    }
+    else if (heartRate < MIN_HEART_RATE) 
+    {
+        debug.println ("ALERT: Bradycardia detected - heart rate too low!");
+        isNormal = false;
+    }
+    else if (heartRate > MAX_HEART_RATE) 
+    {
+        debug.println ("ALERT: Tachycardia detected - heart rate too high!");
+        isNormal = false;
+    }
+    else 
+    {
+        debug.println ("Heart rate is within normal range.");
+    }
+
+    // Визуальная индикация (можно заменить на светодиод/вибрацию)
+    if (!isNormal) 
+    {
+        // Сигнализация - мигание или вибрация
+        for (int i = 0; i < 3; i++) 
+        {
+            debug.println ("ALARM!");
+            delay (500);
+        }
+    }
+
+    return isNormal;
 }
+
 
 bool is_moving ()
 {
