@@ -1,12 +1,44 @@
 #include "main.h"
 
-bool is_pulsing (struct DeviceData * data)
+bool is_pulsing ()
 {
+    struct DeviceData* data = (struct DeviceData*) malloc (sizeof(struct DeviceData));
+
+    //add condition for 5-20 sec burst of measurements
+
+    debug.begin(9600);
+    debug.println("MAX30105 Basic Readings Example");
+
+    // Initialize sensor
+    if (particleSensor.begin() == false)
+    {
+        debug.println("MAX30105 was not found. Please check wiring/power. ");
+        while (1);
+    }
+
+    particleSensor.setup(); //Configure sensor. Use 6.4mA for LED drive
+
+    while (true)
+    {
+        /*debug.print(" R[");
+        debug.print(particleSensor.getRed());
+        debug.print("] IR[");
+        debug.print(particleSensor.getIR());
+        debug.print("] G[");
+        debug.print(particleSensor.getGreen());
+        debug.print("]");*/
+        debug.print(particleSensor.getIR());
+            Serial.println();
+        delay(10);
+    }
+
     return true;
 }
 
-bool is_moving (struct DeviceData * data)
+bool is_moving ()
 {
+    struct DeviceData* data = (struct DeviceData*) malloc (sizeof(struct DeviceData));
+
     digitalWrite (LED_PIN, HIGH);
     data->mpu.setSleepEnabled (false);
     delay (5);
@@ -78,8 +110,10 @@ bool is_moving (struct DeviceData * data)
     return (max_ax - min_ax >= 4000) || (max_ay - min_ay >= 4000);// || (max_az - min_az >= 2500);
 }
 
-void emergency (struct DeviceData * data)
+void emergency ()
 {
+    struct DeviceData* data = (struct DeviceData*) malloc (sizeof(struct DeviceData));
+
     send_tg_message ("NO MOVEMENT");
     while (!data->button_state)
         ;
@@ -88,8 +122,10 @@ void emergency (struct DeviceData * data)
     data->pulse_analysis = false;
 }
 
-void make_buzz (struct DeviceData * data)
+void make_buzz ()
 {
+    struct DeviceData* data = (struct DeviceData*) malloc (sizeof(struct DeviceData));
+
     if (data->is_buzzing)
     {
         digitalWrite (BUZZER_PIN, !digitalRead (BUZZER_PIN));
@@ -109,13 +145,16 @@ void smart_delay (int time)
         ;
 }
 
-void IRAM_ATTR movement_check (struct DeviceData * data)
+void IRAM_ATTR movement_check ()
 {
+    struct DeviceData* data = (struct DeviceData*) malloc (sizeof(struct DeviceData));
     data->movement_analysis = true;
 }
 
-void IRAM_ATTR battery_check ()
+void battery_check ()
 {
+    struct DeviceData* data = (struct DeviceData*) malloc (sizeof(struct DeviceData));
+
     const int FULL_CHARGE_V = 4;
     const int LOW_CHARGE_V = 3;
     const int V_DIVIDER = 2;

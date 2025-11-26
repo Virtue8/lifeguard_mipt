@@ -5,14 +5,19 @@
 #include <Wire.h>
 #include "I2Cdev.h"
 #include "MPU6050.h"
+#include "MAX30105.h"
 
 #include "analysis.h"
 #include "constants.h"
 #include "connection.h"
+#include <malloc.h>
 
-void make_buzz (struct DeviceData * data);
+MAX30105 particleSensor;
+
+#define debug Serial 
+
+void make_buzz ();
 void smart_delay (int time);
-
 
 //--------DATA STRUCT----------------
 
@@ -41,6 +46,7 @@ struct DeviceData
     //------------Buzzer-------------
     hw_timer_t* buzzer_timer = NULL;
     bool        is_buzzing = false;
+
 };
 
 #endif

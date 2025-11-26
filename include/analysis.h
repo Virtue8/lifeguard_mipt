@@ -1,11 +1,15 @@
 #ifndef ANALYSIS_H
 #define ANALYSIS_H
 
-bool is_pulsing (struct DeviceData * data);
-bool is_moving (struct DeviceData * data);
+bool is_pulsing ();
+bool is_moving ();
 
-void IRAM_ATTR movement_check (struct DeviceData * data);
-void IRAM_ATTR battery_check (struct DeviceData * data);
-void emergency (struct DeviceData * data);
+void button_interrupt ();
+void start_buzzing ();
+void end_buzzing ();
+
+void IRAM_ATTR movement_check ();
+void battery_check ();
+void emergency ();
 
 #endif
