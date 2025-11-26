@@ -17,6 +17,7 @@ void start_buzzing();
 void end_buzzing();
 void emergency();
 
+MAX30105 PulseSensor;
 MPU6050 mpu;
 
 hw_timer_t* sensor_timer = NULL;
@@ -106,26 +107,6 @@ void loop()
                 button_was_pressed = false;
         }
     }
-    // if (movement_is_checking)
-    // {
-    //     if (!is_movement())
-    //     {
-    //         int i = 1;
-    //         while (i <= 5 || !is_movement)
-    //             i++;
-    //         if (i == 5)
-    //         {
-    //             is_buzzing = true;
-    //             int start_time = millis();
-    //             while (!button_was_pressed && millis() - start_time < 10000)
-    //                 delay(10);
-    //             if (millis() - start_time < 10000)
-    //                 is_buzzing = false;
-    //             else
-    //                 emergency();
-    //         }
-    //     }
-    // }
 }
 
 void button_interrupt()

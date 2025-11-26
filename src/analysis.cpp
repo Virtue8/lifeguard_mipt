@@ -9,10 +9,126 @@
 
 extern MPU6050 mpu;
 extern bool movement_is_checking;
+extern MAX30105 PulseSensor;
 
-bool is_pulse()
+bool is_pulsing ()
 {
-    return true;
+    Serial.println ("MAX30105 Heart Rate Monitor Started");
+
+    // Инициализация сенсора
+    if (PulseSensor.begin () == false)
+    {
+        Serial.println ("MAX30105 was not found. Please check wiring/power.");
+        return false;
+    }
+
+    PulseSensor.setup (); // Конфигурация сенсора
+    PulseSensor.setPulseAmplitudeRed (0x0A); // Настройка амплитуды для лучшего сигнала
+    PulseSensor.setPulseAmplitudeIR (0x0A);
+
+    // Параметры для анализа пульса
+    const int SAMPLE_WINDOW = 10000; // 10 секунд измерения
+    const int MIN_HEART_RATE = 40;   // минимальный нормальный пульс
+    const int MAX_HEART_RATE = 180;  // максимальный нормальный пульс
+    const int IR_THRESHOLD = 50000;  // порог для обнаружения пульсации
+
+    unsigned long startTime = millis ();
+    int samples = 0;
+    int pulseCount = 0;
+    int lastIRValue = 0;
+    bool wasRising = false;
+    long totalIR = 0;
+
+    Serial.println ("Starting heart rate monitoring...");
+
+    while (millis () - startTime < SAMPLE_WINDOW)
+    {
+        int irValue = PulseSensor.getIR ();
+        totalIR += irValue;
+        samples++;
+
+        // Обнаружение пиков (простой алгоритм)
+        if (irValue > IR_THRESHOLD)
+        {
+            if (lastIRValue <= IR_THRESHOLD && !wasRising)
+            {
+                // Обнаружен восходящий фронт - потенциальный удар сердца
+                pulseCount++;
+                wasRising = true;
+                Serial.println ("Beat detected!");
+            }
+        }
+        else
+        {
+            wasRising = false;
+        }
+
+        lastIRValue = irValue;
+
+        // Вывод данных для отладки (можно уменьшить частоту)
+        if (samples % 100 == 0) {
+            Serial.print ("IR: ");
+            Serial.print (irValue);
+            Serial.print (" | Beats: ");
+            Serial.println (pulseCount);
+        }
+
+        delay (10);
+    }
+
+    // Расчет среднего значения IR и пульса
+    int averageIR = totalIR / samples;
+    int heartRate = (pulseCount * 60000) / SAMPLE_WINDOW; // ударов в минуту
+
+    Serial.println ("\n=== Monitoring Results ===");
+    Serial.print ("Total samples: ");
+    Serial.println (samples);
+    Serial.print ("Average IR: ");
+    Serial.println (averageIR);
+    Serial.print ("Detected heart rate: ");
+    Serial.print (heartRate);
+    Serial.println (" BPM");
+
+    // Анализ результатов
+    bool isNormal = true;
+
+    if (averageIR < 10000)
+    {
+        Serial.println ("ALERT: Poor sensor contact - check placement!");
+        isNormal = false;
+    }
+    else if (pulseCount == 0)
+    {
+        Serial.println ("ALERT: No heartbeat detected!");
+        isNormal = false;
+    }
+    else if (heartRate < MIN_HEART_RATE)
+    {
+        Serial.println ("ALERT: Bradycardia detected - heart rate too low!");
+        isNormal = false;
+    }
+    else if (heartRate > MAX_HEART_RATE)
+    {
+        Serial.println ("ALERT: Tachycardia detected - heart rate too high!");
+        isNormal = false;
+    }
+    else
+    {
+        Serial.println ("Heart rate is within normal range.");
+    }
+
+    // Визуальная индикация (можно заменить на светодиод/вибрацию)
+    if (!isNormal)
+    {
+        // Сигнализация - мигание или вибрация
+        for (int i = 0; i < 3; i++)
+        {
+            Serial.println ("ALARM!");
+            delay (500);
+        }
+    }
+
+    return isNormal;
 }
 
 bool is_movement()
