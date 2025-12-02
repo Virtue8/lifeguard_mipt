@@ -1,15 +1,15 @@
 #ifndef ANALYSIS_H
 #define ANALYSIS_H
 
-bool is_pulsing ();
+#include <stdint.h>
+
+typedef struct {
+    float value;
+    uint32_t time_ms;
+} Sample;
+
+// Функция анализа экстремумов и производных
+void analyze_series_with_window(Sample *samples, int n);
 bool is_moving ();
-
-void button_interrupt ();
-void start_buzzing ();
-void end_buzzing ();
-
-void IRAM_ATTR movement_check ();
-void battery_check ();
-void emergency ();
 
 #endif
