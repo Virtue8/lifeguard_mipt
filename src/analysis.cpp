@@ -17,13 +17,18 @@ extern MPU6050 mpu;
 #define WINDOW_SIZE 25      // размер окна для локального экстремума (примерно 1/3-1/2 периода)
 #define SAMPLE_COUNT 1000   // 10 секунд при dt = 10ms
 
-void analyze_series_with_window(Sample *samples, int n) {
-    if (n < 3) return;
+#define MIN_HEARTRATE 100
+#define MAX_HEARTRATE 200
 
+#define MIN_AVG_VALUE 70000
+#define MAX_AVG_VALUE 120000
+
+bool is_pulsing(Sample *samples, int n)
+{
     int extremums[MAX_EXTREMUMS];
     int count = 0;
+    int sum_value = 0;
 
-    // ищем экстремумы с окрестностью
     for (int i = WINDOW_SIZE; i < n - WINDOW_SIZE; i++) {
         bool is_peak = true;
         bool is_trough = true;
@@ -34,46 +39,61 @@ void analyze_series_with_window(Sample *samples, int n) {
             if (samples[i].value >= samples[j].value) is_trough = false;
         }
 
-        // фильтр по амплитуде относительно последнего экстремума
-        if ((is_peak || is_trough) && (count == 0 || fabs(samples[i].value - samples[extremums[count-1]].value) >= MIN_AMPLITUDE)) {
+        if ((is_peak || is_trough) &&
+            (count == 0 ||
+             fabs(samples[i].value - samples[extremums[count-1]].value) >= MIN_AMPLITUDE))
+        {
             extremums[count++] = i;
             if (count >= MAX_EXTREMUMS) break;
         }
     }
 
+    // --- FIX HERE: not enough extremums to compute frequency ---
     if (count < 2) {
-        Serial.println("Недостаточно значимых экстремумов для серии");
-        return;
+        Serial.println("Недостаточно экстремумов для вычисления частоты.");
+        return false;
     }
 
     // статистика
     float sum_intervals = 0;
     for (int i = 1; i < count; i++) {
-        uint32_t dt = samples[extremums[i]].time_ms - samples[extremums[i-1]].time_ms;
+        uint32_t dt = samples[extremums[i]].time_ms -
+                      samples[extremums[i-1]].time_ms;
         sum_intervals += dt;
+        sum_value += samples[i].value;
     }
+
+    int avg_value = sum_value / (count - 1);
     float avg_interval = sum_intervals / (count - 1); // мс
-    float freq_per_min = 60000.0 / avg_interval;     // экстремумы в минуту
+    float freq_per_min = 60000.0 / avg_interval;
 
     Serial.print("Количество экстремумов: "); Serial.println(count);
     Serial.print("Среднее время между экстремумами (мс): "); Serial.println(avg_interval);
+    Serial.print("Среднее значение экстремумов: "); Serial.println(avg_value);
     Serial.print("Частота экстремумов в минуту: "); Serial.println(freq_per_min);
 
-    // вывод экстремумов и производных
     Serial.println("Экстремумы:");
     for (int i = 1; i < count; i++) {
         int idx_prev = extremums[i-1];
         int idx_curr = extremums[i];
-        float derivative = (samples[idx_curr].value - samples[idx_prev].value) /
-                           ((float)(samples[idx_curr].time_ms - samples[idx_prev].time_ms)/1000.0f);
+        float derivative =
+            (samples[idx_curr].value - samples[idx_prev].value) /
+            ((samples[idx_curr].time_ms - samples[idx_prev].time_ms) / 1000.0f);
+
         Serial.print("Экстремум #"); Serial.print(i);
         Serial.print(" (индекс "); Serial.print(idx_curr); Serial.print(")");
         Serial.print(", значение: "); Serial.print(samples[idx_curr].value);
         Serial.print(", производная: "); Serial.println(derivative);
     }
+
+    if (freq_per_min < MIN_HEARTRATE) {Serial.print("Крыжовник"); return false;}
+    if (freq_per_min > MAX_HEARTRATE) {Serial.print("Крыжовник"); return false;}
+
+    if (avg_value < MIN_AVG_VALUE) {Serial.print("Крыжовник"); return false;}
+    if (avg_value > MAX_AVG_VALUE) {Serial.print("Крыжовник"); return false;}
+
+    return true;
 }
-
-
 
 
 bool is_moving()

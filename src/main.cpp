@@ -108,9 +108,8 @@ void setup()
 Sample buffer[SAMPLE_COUNT];
 int buffer_index = 0;
 
-
-void loop() {
-
+void loop() 
+{
     if (button_was_pressed)
     {
         unsigned long press_start = millis();
@@ -124,19 +123,18 @@ void loop() {
         button_was_pressed = false;
     }
 
-/*  КОД ВАДИМА
     long irValue = particleSensor.getIR();
     buffer[buffer_index].value = irValue;
     buffer[buffer_index].time_ms = millis();
     buffer_index++;
 
     if (buffer_index >= SAMPLE_COUNT) {
-        analyze_series_with_window(buffer, SAMPLE_COUNT);
+        is_pulsing(buffer, SAMPLE_COUNT);
         buffer_index = 0; // новая серия 10 секунд
     }
 
     delay(10); // dt = 10ms
-    */
+    
 }
 
 

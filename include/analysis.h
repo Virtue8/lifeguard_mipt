@@ -9,7 +9,7 @@ typedef struct {
 } Sample;
 
 // Функция анализа экстремумов и производных
-void analyze_series_with_window(Sample *samples, int n);
+bool is_pulsing(Sample *samples, int n);
 bool is_moving ();
 
 #endif
