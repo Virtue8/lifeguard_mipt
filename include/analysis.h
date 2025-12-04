@@ -1,9 +1,15 @@
 #ifndef ANALYSIS_H
 #define ANALYSIS_H
 
-#include "MAX30105.h"
+#include <stdint.h>
 
-bool is_pulsing();
-bool is_movement();
+typedef struct {
+    float value;
+    uint32_t time_ms;
+} Sample;
+
+// Функция анализа экстремумов и производных
+void analyze_series_with_window(Sample *samples, int n);
+bool is_moving ();
 
 #endif

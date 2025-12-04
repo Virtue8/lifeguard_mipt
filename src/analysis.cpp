@@ -1,137 +1,82 @@
 #include "Arduino.h"
 #include <Wire.h>
+#include <math.h>
 #include "I2Cdev.h"
-#include "MPU6050.h"
 
 #include "main.h"
 #include "analysis.h"
 #include "constants.h"
 
-extern MPU6050 mpu;
 extern bool movement_is_checking;
-extern MAX30105 PulseSensor;
 
-bool is_pulsing ()
-{
-    Serial.println ("MAX30105 Heart Rate Monitor Started");
+extern MAX30105 particleSensor;
+extern MPU6050 mpu;
 
-    // Инициализация сенсора
-    if (PulseSensor.begin () == false)
-    {
-        Serial.println ("MAX30105 was not found. Please check wiring/power.");
-        return false;
-    }
+#define MAX_EXTREMUMS 100
+#define MIN_AMPLITUDE 5     // минимальная разница между экстремумами
+#define WINDOW_SIZE 25      // размер окна для локального экстремума (примерно 1/3-1/2 периода)
+#define SAMPLE_COUNT 1000   // 10 секунд при dt = 10ms
 
-    PulseSensor.setup (); // Конфигурация сенсора
-    PulseSensor.setPulseAmplitudeRed (0x0A); // Настройка амплитуды для лучшего сигнала
-    PulseSensor.setPulseAmplitudeIR (0x0A);
+void analyze_series_with_window(Sample *samples, int n) {
+    if (n < 3) return;
 
-    // Параметры для анализа пульса
-    const int SAMPLE_WINDOW = 10000; // 10 секунд измерения
-    const int MIN_HEART_RATE = 40;   // минимальный нормальный пульс
-    const int MAX_HEART_RATE = 180;  // максимальный нормальный пульс
-    const int IR_THRESHOLD = 50000;  // порог для обнаружения пульсации
+    int extremums[MAX_EXTREMUMS];
+    int count = 0;
 
-    unsigned long startTime = millis ();
-    int samples = 0;
-    int pulseCount = 0;
-    int lastIRValue = 0;
-    bool wasRising = false;
-    long totalIR = 0;
+    // ищем экстремумы с окрестностью
+    for (int i = WINDOW_SIZE; i < n - WINDOW_SIZE; i++) {
+        bool is_peak = true;
+        bool is_trough = true;
 
-    Serial.println ("Starting heart rate monitoring...");
-
-    while (millis () - startTime < SAMPLE_WINDOW)
-    {
-        int irValue = PulseSensor.getIR ();
-        totalIR += irValue;
-        samples++;
-
-        // Обнаружение пиков (простой алгоритм)
-        if (irValue > IR_THRESHOLD)
-        {
-            if (lastIRValue <= IR_THRESHOLD && !wasRising)
-            {
-                // Обнаружен восходящий фронт - потенциальный удар сердца
-                pulseCount++;
-                wasRising = true;
-                Serial.println ("Beat detected!");
-            }
-        }
-        else
-        {
-            wasRising = false;
+        for (int j = i - WINDOW_SIZE; j <= i + WINDOW_SIZE; j++) {
+            if (j == i) continue;
+            if (samples[i].value <= samples[j].value) is_peak = false;
+            if (samples[i].value >= samples[j].value) is_trough = false;
         }
 
-        lastIRValue = irValue;
-
-        // Вывод данных для отладки (можно уменьшить частоту)
-        if (samples % 100 == 0) {
-            Serial.print ("IR: ");
-            Serial.print (irValue);
-            Serial.print (" | Beats: ");
-            Serial.println (pulseCount);
-        }
-
-        delay (10);
-    }
-
-    // Расчет среднего значения IR и пульса
-    int averageIR = totalIR / samples;
-    int heartRate = (pulseCount * 60000) / SAMPLE_WINDOW; // ударов в минуту
-
-    Serial.println ("\n=== Monitoring Results ===");
-    Serial.print ("Total samples: ");
-    Serial.println (samples);
-    Serial.print ("Average IR: ");
-    Serial.println (averageIR);
-    Serial.print ("Detected heart rate: ");
-    Serial.print (heartRate);
-    Serial.println (" BPM");
-
-    // Анализ результатов
-    bool isNormal = true;
-
-    if (averageIR < 10000)
-    {
-        Serial.println ("ALERT: Poor sensor contact - check placement!");
-        isNormal = false;
-    }
-    else if (pulseCount == 0)
-    {
-        Serial.println ("ALERT: No heartbeat detected!");
-        isNormal = false;
-    }
-    else if (heartRate < MIN_HEART_RATE)
-    {
-        Serial.println ("ALERT: Bradycardia detected - heart rate too low!");
-        isNormal = false;
-    }
-    else if (heartRate > MAX_HEART_RATE)
-    {
-        Serial.println ("ALERT: Tachycardia detected - heart rate too high!");
-        isNormal = false;
-    }
-    else
-    {
-        Serial.println ("Heart rate is within normal range.");
-    }
-
-    // Визуальная индикация (можно заменить на светодиод/вибрацию)
-    if (!isNormal)
-    {
-        // Сигнализация - мигание или вибрация
-        for (int i = 0; i < 3; i++)
-        {
-            Serial.println ("ALARM!");
-            delay (500);
+        // фильтр по амплитуде относительно последнего экстремума
+        if ((is_peak || is_trough) && (count == 0 || fabs(samples[i].value - samples[extremums[count-1]].value) >= MIN_AMPLITUDE)) {
+            extremums[count++] = i;
+            if (count >= MAX_EXTREMUMS) break;
         }
     }
 
-    return isNormal;
+    if (count < 2) {
+        Serial.println("Недостаточно значимых экстремумов для серии");
+        return;
+    }
+
+    // статистика
+    float sum_intervals = 0;
+    for (int i = 1; i < count; i++) {
+        uint32_t dt = samples[extremums[i]].time_ms - samples[extremums[i-1]].time_ms;
+        sum_intervals += dt;
+    }
+    float avg_interval = sum_intervals / (count - 1); // мс
+    float freq_per_min = 60000.0 / avg_interval;     // экстремумы в минуту
+
+    Serial.print("Количество экстремумов: "); Serial.println(count);
+    Serial.print("Среднее время между экстремумами (мс): "); Serial.println(avg_interval);
+    Serial.print("Частота экстремумов в минуту: "); Serial.println(freq_per_min);
+
+    // вывод экстремумов и производных
+    Serial.println("Экстремумы:");
+    for (int i = 1; i < count; i++) {
+        int idx_prev = extremums[i-1];
+        int idx_curr = extremums[i];
+        float derivative = (samples[idx_curr].value - samples[idx_prev].value) /
+                           ((float)(samples[idx_curr].time_ms - samples[idx_prev].time_ms)/1000.0f);
+        Serial.print("Экстремум #"); Serial.print(i);
+        Serial.print(" (индекс "); Serial.print(idx_curr); Serial.print(")");
+        Serial.print(", значение: "); Serial.print(samples[idx_curr].value);
+        Serial.print(", производная: "); Serial.println(derivative);
+    }
 }
 
-bool is_movement()
+
+
+
+bool is_moving()
 {
     digitalWrite(LED_PIN, HIGH);
     mpu.setSleepEnabled(false);

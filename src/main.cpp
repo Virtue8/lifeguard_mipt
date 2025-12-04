@@ -1,12 +1,14 @@
 #include "Arduino.h"
 #include <Wire.h>
 #include "I2Cdev.h"
-#include "MPU6050.h"
 
 #include "main.h"
 #include "constants.h"
 #include "connection.h"
 #include "analysis.h"
+
+MAX30105 particleSensor;
+MPU6050 mpu;
 
 void IRAM_ATTR check_movement();
 void IRAM_ATTR check_battery();
@@ -16,9 +18,13 @@ void button_interrupt();
 void start_buzzing();
 void end_buzzing();
 void emergency();
+void check_button();
+void enter_deep_sleep();
 
-MAX30105 PulseSensor;
-MPU6050 mpu;
+
+unsigned long last_measure = 0;
+
+#define debug Serial
 
 hw_timer_t* sensor_timer = NULL;
 hw_timer_t* battery_timer = NULL;
@@ -31,7 +37,17 @@ bool is_buzzing = false;
 
 void setup()
 {
-    Serial.begin(9600);
+    debug.begin(9600);
+    debug.println("MAX30105 Basic Readings Example");
+
+    // Initialize sensor
+    if (particleSensor.begin() == false)
+    {
+      debug.println("MAX30105 was not found. Please check wiring/power. ");
+      while (1);
+    }
+
+    particleSensor.setup(); //Configure sensor. Use 6.4mA for LED drive
 
     //инициализация таймера проверки датчика
     sensor_timer = timerBegin(0, 80, true); //инициализация таймера. 80 - коэф. предделителя
@@ -59,9 +75,24 @@ void setup()
     pinMode(BATTERY_PIN, INPUT_PULLUP);
     pinMode(SDA_PIN, INPUT_PULLUP);
     pinMode(SCL_PIN, INPUT_PULLUP);
-    pinMode(BUTTON_PIN, INPUT);
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-    attachInterrupt(BUTTON_PIN, button_interrupt, HIGH);
+    digitalWrite(LED_PIN, HIGH);
+
+    esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+    if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0)
+    {
+        unsigned long press_start = millis();
+        while (digitalRead(BUTTON_PIN) == LOW)
+            if (millis() - press_start > 3000)
+                break;
+        if (millis() - press_start > 3000)
+            Serial.println("Просыпаемся");
+        else
+            enter_deep_sleep();
+    }
+
+    attachInterrupt(BUTTON_PIN, button_interrupt, FALLING);
 
     Wire.begin(SDA_PIN, SCL_PIN);
     Wire.setClock(400000);
@@ -69,11 +100,50 @@ void setup()
 
     // if (connectToWiFi())
     //     send_tg_message("Connection established");
-    connectToWiFi();
+    connect_to_wifi();
 }
 
+#define SAMPLE_COUNT 1000  // 10 сек при 10 ms dt
+
+Sample buffer[SAMPLE_COUNT];
+int buffer_index = 0;
+
+
+void loop() {
+
+    if (button_was_pressed)
+    {
+        unsigned long press_start = millis();
+        while (digitalRead(BUTTON_PIN) == LOW)
+        {
+            Serial.println("Ждем");
+            if (millis() - press_start > 3000)
+                enter_deep_sleep();
+        }
+        Serial.println("Ложная тревога");
+        button_was_pressed = false;
+    }
+
+/*  КОД ВАДИМА
+    long irValue = particleSensor.getIR();
+    buffer[buffer_index].value = irValue;
+    buffer[buffer_index].time_ms = millis();
+    buffer_index++;
+
+    if (buffer_index >= SAMPLE_COUNT) {
+        analyze_series_with_window(buffer, SAMPLE_COUNT);
+        buffer_index = 0; // новая серия 10 секунд
+    }
+
+    delay(10); // dt = 10ms
+    */
+}
+
+
+/*
 void loop()
 {
+<<<<<<< HEAD
     if (movement_is_checking)
     {
         if (!is_movement())
@@ -107,6 +177,68 @@ void loop()
                 button_was_pressed = false;
         }
     }
+}*/
+
+void check_button() {
+  /*static unsigned long last_press = 0;
+  const unsigned long LONG_PRESS_TIME = 3000; // 3 секунды
+
+  if (digitalRead(BUTTON_PIN) == LOW) {
+    unsigned long press_start = millis();
+
+    // Ждем, пока кнопка отпущена или прошло время
+    while (digitalRead(BUTTON_PIN) == LOW) {
+      if (millis() - press_start > LONG_PRESS_TIME) {
+        // Долгое нажатие обнаружено
+        Serial.println("Long press detected - disabling device");
+
+        // Индикация
+        digitalWrite(LED_PIN, LOW);
+        delay(1000);
+        digitalWrite(LED_PIN, HIGH);
+        delay(1000);
+        digitalWrite(LED_PIN, LOW);
+
+        enter_deep_sleep();
+        return;
+      }
+      delay(50);
+    }
+
+    // Короткое нажатие (можно использовать для других функций)
+    if (millis() - press_start < 1000) {
+      Serial.println("Short press");
+      // Например, показать статус батареи
+    }
+  }*/
+}
+
+void enter_deep_sleep()
+{
+    Serial.println("Спим");
+    Serial.flush();
+
+    // Настройка пробуждения по кнопке (GPIO0)
+    esp_sleep_enable_ext0_wakeup(BUTTON_PIN, 0); // 0 = LOW при нажатии
+
+    // Можно также настроить пробуждение по таймеру
+    // esp_sleep_enable_timer_wakeup(30 * 1000000); // 30 секунд
+
+    // Отключаем всё, что можно
+    disconnect_wifi();
+    button_was_pressed = false;
+
+    // Переводим в глубокий сон
+    esp_deep_sleep_start();
+}
+
+// Функция для принудительного пробуждения (если нужно)
+void force_wakeup() {
+  // Можно использовать touch-пробуждение
+  touchAttachInterrupt(T0, [](){
+    // Пустая функция, просто пробуждаем
+  }, 40);
+  esp_sleep_enable_touchpad_wakeup();
 }
 
 void button_interrupt()
