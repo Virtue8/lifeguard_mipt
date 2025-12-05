@@ -77,7 +77,7 @@ void setup()
     pinMode(SCL_PIN, INPUT_PULLUP);
     pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-    /*esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+    esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
     if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0)
     {
         unsigned long press_start = millis();
@@ -88,25 +88,26 @@ void setup()
             Serial.println("Просыпаемся");
         else
             enter_deep_sleep();
-    }*/
-    while(1)
-    {
-        int press_start = millis();
-        while (digitalRead(BUTTON_PIN) == LOW)
-            ;
-        if (millis() - press_start > 3000)
-        {
-            digitalWrite(LED_PIN, HIGH);
-            delay(250);
-            digitalWrite(LED_PIN, LOW);
-            delay(250);
-            digitalWrite(LED_PIN, HIGH);
-            delay(250);
-            digitalWrite(LED_PIN, LOW);
-            delay(250);
-            break;
-        }
     }
+    else
+        while(1)
+        {
+            int press_start = millis();
+            while (digitalRead(BUTTON_PIN) == LOW)
+                ;
+            if (millis() - press_start > 3000)
+            {
+                digitalWrite(LED_PIN, HIGH);
+                delay(250);
+                digitalWrite(LED_PIN, LOW);
+                delay(250);
+                digitalWrite(LED_PIN, HIGH);
+                delay(250);
+                digitalWrite(LED_PIN, LOW);
+                delay(250);
+                break;
+            }
+        }
 
     attachInterrupt(BUTTON_PIN, button_interrupt, FALLING);
 
@@ -116,7 +117,20 @@ void setup()
 
     // if (connectToWiFi())
     //     send_tg_message("Connection established");
-    connect_to_wifi();
+    while(!connect_to_wifi())
+        ;
+    digitalWrite(LED_PIN, HIGH);
+    delay(250);
+    digitalWrite(LED_PIN, LOW);
+    delay(250);
+    digitalWrite(LED_PIN, HIGH);
+    delay(250);
+    digitalWrite(LED_PIN, LOW);
+    delay(250);
+    digitalWrite(LED_PIN, HIGH);
+    delay(250);
+    digitalWrite(LED_PIN, LOW);
+    delay(250);
 }
 
 #define SAMPLE_COUNT 1000  // 10 сек при 10 ms dt
@@ -126,7 +140,7 @@ int buffer_index = 0;
 
 void loop()
 {
-    /*if (button_was_pressed)
+    if (button_was_pressed)
     {
         unsigned long press_start = millis();
         while (digitalRead(BUTTON_PIN) == LOW)
@@ -134,17 +148,17 @@ void loop()
             if (millis() - press_start > 3000)
                 enter_deep_sleep();
         }
-        if (millis() - press_start < 200)
+        if (millis() - press_start < 40)
             button_was_pressed = false;
         else
             Serial.println("нажатие");
-    }*/
+    }
 
     if (movement_is_checking)
     {
-        if (!is_moving())
+        if (!is_moving() && !button_was_pressed)
         {
-            if (!is_moving())
+            if (!is_moving() && !button_was_pressed)
             {
                 Serial.println("Checking pulse");
                 for (int i = 0; i < SAMPLE_COUNT; i++)
@@ -157,7 +171,7 @@ void loop()
                     //Serial.println(t0);
                     delay(10);
                 }
-                if (!is_pulsing(buffer, SAMPLE_COUNT))
+                if (!is_pulsing(buffer, SAMPLE_COUNT) && !button_was_pressed)
                 {
                     start_buzzing();
                     int start_time = millis();
