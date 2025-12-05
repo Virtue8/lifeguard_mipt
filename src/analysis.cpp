@@ -25,6 +25,7 @@ extern MPU6050 mpu;
 
 bool is_pulsing(Sample *samples, int n)
 {
+    Serial.println("Analysing pulse");
     int extremums[MAX_EXTREMUMS];
     int count = 0;
     int sum_value = 0;
@@ -98,11 +99,11 @@ bool is_pulsing(Sample *samples, int n)
 
 bool is_moving()
 {
-    digitalWrite(LED_PIN, HIGH);
+    Serial.println("checking gyros");
     mpu.setSleepEnabled(false);
     delay(5);
 
-    int N = 200;
+    int N = 100;
 
     struct single_data
     {
@@ -158,11 +159,10 @@ bool is_moving()
 
     movement_is_checking = false;
     mpu.setSleepEnabled(true);
-    digitalWrite(LED_PIN, LOW);
     Serial.print(max_ax - min_ax);
     Serial.print(" ");
     Serial.print(max_ay - min_ay);
     Serial.print(" ");
-    Serial.println((max_ax - min_ax >= 4000) || (max_ay - min_ay >= 4000));
-    return (max_ax - min_ax >= 4000) || (max_ay - min_ay >= 4000);// || (max_az - min_az >= 2500);
+    Serial.println((max_ax - min_ax >= 3500) || (max_ay - min_ay >= 3500));
+    return (max_ax - min_ax >= 3500) || (max_ay - min_ay >= 3500);// || (max_az - min_az >= 2500);
 }

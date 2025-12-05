@@ -77,9 +77,7 @@ void setup()
     pinMode(SCL_PIN, INPUT_PULLUP);
     pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-    digitalWrite(LED_PIN, HIGH);
-
-    esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+    /*esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
     if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0)
     {
         unsigned long press_start = millis();
@@ -90,6 +88,24 @@ void setup()
             Serial.println("Просыпаемся");
         else
             enter_deep_sleep();
+    }*/
+    while(1)
+    {
+        int press_start = millis();
+        while (digitalRead(BUTTON_PIN) == LOW)
+            ;
+        if (millis() - press_start > 3000)
+        {
+            digitalWrite(LED_PIN, HIGH);
+            delay(250);
+            digitalWrite(LED_PIN, LOW);
+            delay(250);
+            digitalWrite(LED_PIN, HIGH);
+            delay(250);
+            digitalWrite(LED_PIN, LOW);
+            delay(250);
+            break;
+        }
     }
 
     attachInterrupt(BUTTON_PIN, button_interrupt, FALLING);
@@ -108,107 +124,58 @@ void setup()
 Sample buffer[SAMPLE_COUNT];
 int buffer_index = 0;
 
-void loop() 
+void loop()
 {
-    if (button_was_pressed)
+    /*if (button_was_pressed)
     {
         unsigned long press_start = millis();
         while (digitalRead(BUTTON_PIN) == LOW)
         {
-            Serial.println("Ждем");
             if (millis() - press_start > 3000)
                 enter_deep_sleep();
         }
-        Serial.println("Ложная тревога");
-        button_was_pressed = false;
-    }
+        if (millis() - press_start < 200)
+            button_was_pressed = false;
+        else
+            Serial.println("нажатие");
+    }*/
 
-    long irValue = particleSensor.getIR();
-    buffer[buffer_index].value = irValue;
-    buffer[buffer_index].time_ms = millis();
-    buffer_index++;
-
-    if (buffer_index >= SAMPLE_COUNT) {
-        is_pulsing(buffer, SAMPLE_COUNT);
-        buffer_index = 0; // новая серия 10 секунд
-    }
-
-    delay(10); // dt = 10ms
-    
-}
-
-
-/*
-void loop()
-{
-<<<<<<< HEAD
     if (movement_is_checking)
     {
-        if (!is_movement())
+        if (!is_moving())
         {
-            bool b = false;
-            for (int i = 0; i < 5 && !b && !button_was_pressed; i++)
+            if (!is_moving())
             {
-                b |= is_movement();
-                Serial.print("b = ");
-                Serial.print(b);
-                Serial.print("; button = ");
-                Serial.println(button_was_pressed);
-            }
-            if (!b && !button_was_pressed)
-            {
-                start_buzzing();
-                int start_time = millis();
-                while (millis() - start_time < 10000 && !button_was_pressed)
-                    delay(100);
-                if (button_was_pressed)
+                Serial.println("Checking pulse");
+                for (int i = 0; i < SAMPLE_COUNT; i++)
                 {
-                    end_buzzing();
-                    button_was_pressed = false;
+                    //int t0 = micros();
+                    long irValue = particleSensor.getIR();
+                    buffer[i].value = irValue;
+                    buffer[i].time_ms = millis();
+                    //t0 = micros() - t0;
+                    //Serial.println(t0);
+                    delay(10);
                 }
-                else
+                if (!is_pulsing(buffer, SAMPLE_COUNT))
                 {
-                    emergency();
+                    start_buzzing();
+                    int start_time = millis();
+                    while (millis() - start_time < 10000 && !button_was_pressed)
+                        delay(100);
+                    if (button_was_pressed)
+                    {
+                        end_buzzing();
+                        button_was_pressed = false;
+                    }
+                    else
+                    {
+                        emergency();
+                    }
                 }
             }
-            if (button_was_pressed)
-                button_was_pressed = false;
         }
     }
-}*/
-
-void check_button() {
-  /*static unsigned long last_press = 0;
-  const unsigned long LONG_PRESS_TIME = 3000; // 3 секунды
-
-  if (digitalRead(BUTTON_PIN) == LOW) {
-    unsigned long press_start = millis();
-
-    // Ждем, пока кнопка отпущена или прошло время
-    while (digitalRead(BUTTON_PIN) == LOW) {
-      if (millis() - press_start > LONG_PRESS_TIME) {
-        // Долгое нажатие обнаружено
-        Serial.println("Long press detected - disabling device");
-
-        // Индикация
-        digitalWrite(LED_PIN, LOW);
-        delay(1000);
-        digitalWrite(LED_PIN, HIGH);
-        delay(1000);
-        digitalWrite(LED_PIN, LOW);
-
-        enter_deep_sleep();
-        return;
-      }
-      delay(50);
-    }
-
-    // Короткое нажатие (можно использовать для других функций)
-    if (millis() - press_start < 1000) {
-      Serial.println("Short press");
-      // Например, показать статус батареи
-    }
-  }*/
 }
 
 void enter_deep_sleep()
@@ -247,7 +214,7 @@ void button_interrupt()
 
 void emergency()
 {
-    send_tg_message("NO MOVEMENT");
+    send_tg_message("ВНИМАНИЕ\nЧРЕЗВЫЧАЙНАЯ СИТУАЦИЯ\nПУЛЬС НЕ ОБНАРУЖЕН");
     while (!button_was_pressed)
     {
         delay(100);
@@ -271,12 +238,14 @@ void end_buzzing()
     timerAlarmDisable(buzzer_timer);
     digitalWrite(BUZZER_PIN, LOW);
     digitalWrite(VIBRO_PIN, LOW);
+    digitalWrite(LED_PIN, LOW);
 }
 
 void make_buzz()
 {
     digitalWrite(BUZZER_PIN, !digitalRead(BUZZER_PIN));
     digitalWrite(VIBRO_PIN, !digitalRead(VIBRO_PIN));
+    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
 }
 
 void smart_delay(int time)
